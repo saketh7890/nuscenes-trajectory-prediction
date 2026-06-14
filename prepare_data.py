@@ -2,7 +2,7 @@ from nuscenes.nuscenes import NuScenes
 from collections import Counter
 import numpy as np
 import pickle
-nusc = NuScenes(version='v1.0-mini', dataroot='data/nuscenes', verbose=False)
+nusc = NuScenes(version='v1.0-trainval', dataroot='data/nuscenes', verbose=False)
 def get_ego_pose(nusc,sample_token):
     sample=nusc.get('sample',sample_token)
     lidar_token=sample['data']['LIDAR_TOP']
