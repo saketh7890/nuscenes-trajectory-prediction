@@ -23,6 +23,7 @@ def build_samples(trajectories):
     for traj in trajectories:
         positions = traj['positions']
         category  = traj['category']
+        map_features=traj['map_features']
 
         # Normalize
         norm = [((x - mean[0]) / std[0],
@@ -35,7 +36,8 @@ def build_samples(trajectories):
             samples.append({
                 'past':     np.array(past),
                 'future':   np.array(future),
-                'category': category
+                'category': category,
+                'map_features': (traj['map_features']-mean)/std
             })
     return samples
 
