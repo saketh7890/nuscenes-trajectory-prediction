@@ -18,7 +18,6 @@ std  = stats['std']
 print(f"Train samples: {len(train_samples)}")
 print(f"Val   samples: {len(val_samples)}")
 
-# Device setup — use Mac GPU (MPS) if available
 device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 print(f"Using device: {device}")
 
@@ -31,14 +30,18 @@ class TrajectoryDataset(Dataset):
         s = self.samples[idx]
         return (torch.FloatTensor(s['past']),
                 torch.FloatTensor(s['future']),
-                torch.FloatTensor(s['map_features']))
+                torch.FloatTensor(s['map_features']),
+                torch.FloatTensor(s['neighbor_features']))
 
 def wta_loss(predictions, targets):
     targets_expanded = targets.unsqueeze(1).expand_as(predictions)
-    losses = ((predictions - targets_expanded) ** 2).mean(dim=[2, 3])
-    best_idx = losses.argmin(dim=1)
+    ade_losses = ((predictions - targets_expanded) ** 2).mean(dim=[2, 3])
+    fde_losses = ((predictions[:, :, -1, :] - targets[:, -1, :].unsqueeze(1)) ** 2).mean(dim=-1)
+    combined = 0.7 * ade_losses + 0.3 * fde_losses
+
+    best_idx = combined.argmin(dim=1)
     batch_size = predictions.shape[0]
-    best_losses = losses[torch.arange(batch_size), best_idx]
+    best_losses = combined[torch.arange(batch_size), best_idx]
     return best_losses.mean()
 
 train_dataset = TrajectoryDataset(train_samples)
@@ -57,13 +60,14 @@ best_val_loss = float('inf')
 for epoch in range(EPOCHS):
     model.train()
     train_loss = 0
-    for past, future, map_features in train_loader:
+    for past, future, map_features, neighbor_features in train_loader:
         past = past.to(device)
         future = future.to(device)
         map_features = map_features.to(device)
+        neighbor_features = neighbor_features.to(device)
 
         optimizer.zero_grad()
-        prediction = model(past, map_features)
+        prediction = model(past, map_features, neighbor_features)
         loss = wta_loss(prediction, future)
         loss.backward()
         optimizer.step()
@@ -73,12 +77,13 @@ for epoch in range(EPOCHS):
     model.eval()
     val_loss = 0
     with torch.no_grad():
-        for past, future, map_features in val_loader:
+        for past, future, map_features, neighbor_features in val_loader:
             past = past.to(device)
             future = future.to(device)
             map_features = map_features.to(device)
+            neighbor_features = neighbor_features.to(device)
 
-            prediction = model(past, map_features)
+            prediction = model(past, map_features, neighbor_features)
             loss = wta_loss(prediction, future)
             val_loss += loss.item()
     val_loss /= len(val_loader)

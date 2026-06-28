@@ -27,12 +27,13 @@ total_ade = 0
 count = 0
 
 with torch.no_grad():
-    for past, future, map_features in val_loader:
+    for past, future, map_features, neighbor_features in val_loader:
         past = past.to(device)
         future = future.to(device)
         map_features = map_features.to(device)
+        neighbor_features = neighbor_features.to(device)
 
-        prediction = model(past, map_features)
+        prediction = model(past, map_features, neighbor_features)
         pred_m   = prediction.cpu().numpy() * std + mean
         future_m = future.cpu().numpy() * std + mean
         future_m = future_m[:, np.newaxis, :, :]

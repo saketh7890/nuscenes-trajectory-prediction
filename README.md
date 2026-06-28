@@ -8,7 +8,8 @@ LSTM and Transformer-based trajectory prediction pipeline trained on the full nu
 |-------|---------|----------|-------------|
 | LSTM | Mini (10 scenes) | 2.26m | 1,767 |
 | Transformer (no map) | Full (850 scenes metadata) | 1.56m | 107,923 |
-| Transformer + top-3-lane map + K=5 + cosine LR | Full | **1.01m** | 107,915 |
+| Transformer + top-3-lane map + K=5 + cosine LR | Full | 1.01m | 107,915 |
+| + Graph Attention social agents (hand-implemented) | Full | **0.9661m** | 107,894 |
 
 ![Predictions](predictions.png)
 
@@ -33,6 +34,16 @@ LSTM and Transformer-based trajectory prediction pipeline trained on the full nu
 - Cosine annealing LR schedule (lr=0.00005 → 1e-6 over 100 epochs)
 - GPU-accelerated training (PyTorch MPS on Apple Silicon)
 - Result: **1.01m minADE@5** on 107,915 validation samples (35% improvement over map-agnostic baseline)
+
+## Social Agents (Graph Attention)
+
+Added multi-agent context using a hand-implemented Graph Attention Network (GAT) layer:
+- For each target agent, find up to 5 nearby agents within 20m at their last observed sample (two-pass nearest-neighbor search over `sample['anns']`)
+- Pull each neighbor's own past 4 frames via their annotation chain (`ann['prev']`), converted to target-relative coordinates
+- GAT layer learns attention weights over neighbors (not just raw concatenation), producing a single relevance-weighted summary token
+- Positional encoding: 4 past + 30 map + 1 GAT-summarized neighbor token = 35 total tokens
+
+**Negative result, documented honestly:** an initial attempt using flat concatenation of all 20 raw neighbor-frame values (5 neighbors × 4 frames) as separate tokens *increased* minADE@5 to 1.0876m — worse than the 1.01m baseline. Replacing this with a proper Graph Attention layer (learned relevance weighting instead of flat concatenation) improved minADE@5 to **0.9661m**, a 4% improvement over baseline and a 38% improvement over the original map-agnostic Transformer.
 
 ## ROS2 Deployment
 
@@ -72,6 +83,16 @@ python3 evaluate.py
 python3 transformer_evaluate.py
 python3 visualize.py
 ```
+
+## Social Agents (Graph Attention)
+
+Added multi-agent context using a hand-implemented Graph Attention Network (GAT) layer:
+- For each target agent, find up to 5 nearby agents within 20m at their last observed sample (two-pass nearest-neighbor search over `sample['anns']`)
+- Pull each neighbor's own past 4 frames via their annotation chain (`ann['prev']`), converted to target-relative coordinates
+- GAT layer learns attention weights over neighbors (not just raw concatenation), producing a single relevance-weighted summary token
+- Positional encoding: 4 past + 30 map + 1 GAT-summarized neighbor token = 35 total tokens
+
+**Negative result, documented honestly:** an initial attempt using flat concatenation of all 20 raw neighbor-frame values (5 neighbors × 4 frames) as separate tokens *increased* minADE@5 to 1.0876m — worse than the 1.01m baseline. Replacing this with a proper Graph Attention layer (learned relevance weighting instead of flat concatenation) improved minADE@5 to **0.9661m**, a 4% improvement over baseline and a 38% improvement over the original map-agnostic Transformer.
 
 ## ROS2 Deployment
 
